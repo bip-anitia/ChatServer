@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 )
 
 func main() {
 	list, err := net.Listen("tcp", "localhost:8000")
 	if err != nil {
 		log.Fatalf("Failed to listen on port 8000: %v", err)
+		fmt.Println("Listening on localhost:8000")
 		panic(err)
 	}
 	go broadcaster()
@@ -56,19 +58,31 @@ func broadcaster() {
 }
 
 func handleConn(conn net.Conn) {
+	nick := bufio.NewScanner(conn)
+
 	ch := make(chan message)
 	go clientWriter(conn, ch)
-	who := conn.RemoteAddr().String()
-	ch <- message{Nick: who, Text: "You are " + who}
-	messages <- message{Nick: who, Text: who + " has arrived"}
+	fmt.Fprint(conn, "Enter your nickname: ")
+	scan := nick.Scan()
+	if scan == false {
+		conn.Close()
+		return
+	}
+	who := nick.Text()
+	nickName := strings.TrimSpace(who)
+	if nickName == "" {
+		conn.Close()
+		return
+	}
+	ch <- message{Nick: nickName, Text: "You are " + nickName}
+	messages <- message{Nick: nickName, Text: nickName + " has arrived"}
 	entering <- ch
 
-	input := bufio.NewScanner(conn)
-	for input.Scan() {
-		messages <- message{Nick: who, Text: input.Text()}
+	for nick.Scan() {
+		messages <- message{Nick: nickName, Text: nick.Text()}
 	}
 	leaving <- ch
-	messages <- message{Nick: who, Text: who + " has left"}
+	messages <- message{Nick: nickName, Text: nickName + " has left"}
 	conn.Close()
 
 }
