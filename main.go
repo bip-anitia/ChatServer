@@ -41,20 +41,31 @@ var (
 )
 
 func broadcaster() {
+	history := make([]message, 0)
+
 	clients := make(map[client]bool)
+	maxHistory := 10
 	for {
 		select {
 		case msg := <-messages:
 			for cli := range clients {
 				cli <- msg
 			}
+			history = append(history, msg)
+			if len(history) > maxHistory {
+				history = history[len(history)-maxHistory:]
+			}
 		case cli := <-entering:
+			for _, msg := range history {
+				cli <- msg
+			}
 			clients[cli] = true
 		case cli := <-leaving:
 			delete(clients, cli)
 			close(cli)
 		}
 	}
+
 }
 
 func handleConn(conn net.Conn) {
